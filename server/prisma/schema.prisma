@@ -1,0 +1,447 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+    directUrl = env("DIRECT_URL") // For Neon serverless driver
+
+}
+
+model User {
+  id    String @id @default(cuid())
+  name  String?
+  email     String @unique
+  password  String
+  role Role @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  refreshToken String? @unique
+  cart        Cart?
+   addresses    Address[]
+  orders       Order[]
+}
+
+enum Role {
+  USER
+  SUPER_ADMIN
+}
+
+
+// Product Types and Categories
+enum ProductType {
+  FASHION
+  ELECTRONICS
+  BEAUTY
+  SHOES
+  HOME_DECOR
+  ACCESSORIES
+  BOOKS
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  type        ProductType // Determines what attributes are relevant
+  description String?
+  image       String?
+  products    Product[]
+  sizeGuides  SizeGuide[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Main Product Model
+model Product {
+  id              String        @id @default(cuid())
+  name            String
+  brand           String
+  description     String
+  price           Float
+  category        Category      @relation(fields: [categoryId], references: [id])
+  categoryId      String
+  baseStock       Int          // Base stock for products without variations
+  soldCount       Int          @default(0)
+  rating          Float?
+  status          ProductStatus @default(DRAFT)
+  metadata        Json?        // For flexible additional data
+  slug            String       @unique  // URL-friendly identifier
+  
+  // Optional Relations with onDelete: Cascade
+  variations      ProductVariation[] @relation("ProductVariations")
+  flashSale       FlashSale?
+  specifications  ProductSpec[]      @relation("ProductSpecs")
+  flashSaleProducts FlashSaleProduct[] @relation("ProductFlashSales")
+  productImages   ProductImage[]     @relation("ProductImages")
+  
+  // Product Flags
+  isFeatured      Boolean       @default(false)
+  isTrending      Boolean       @default(false)
+  isNewArrival    Boolean       @default(false)
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([status, createdAt])
+  @@index([categoryId, status])
+  @@index([isFeatured, status])
+  @@index([isTrending, status])
+  // Removed the fulltext index since it's not supported
+}
+
+
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id])
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id])
+  productId String
+  quantity  Int
+  size      String?  // Optional
+  color     String?  // Optional
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, productId, size, color])
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  OUT_OF_STOCK
+}
+
+// Add image tracking
+model ProductImage {
+  id          String   @id @default(cuid())
+  product     Product  @relation("ProductImages", fields: [productId], references: [id], onDelete: Cascade)
+  productId   String
+  url         String
+  publicId    String   // Cloudinary public ID
+  width       Int
+  height      Int
+  format      String
+  size        Int
+  thumbnailUrl String
+  mediumUrl   String
+  order       Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([productId])
+}
+
+// Simplified ProductVariation model
+model ProductVariation {
+  id          String   @id @default(cuid())
+  product     Product  @relation("ProductVariations", fields: [productId], references: [id], onDelete: Cascade)
+  productId   String
+  type        String   // Add this field for clothes/shoes
+  size        String?  
+  color       String?  
+  stock       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([productId])
+}
+
+// ProductSpec will handle SKU and other specifications
+model ProductSpec {
+  id          String   @id @default(cuid())
+  product     Product  @relation("ProductSpecs", fields: [productId], references: [id], onDelete: Cascade)
+  productId   String
+  key         String   // e.g., "SKU", "Model", "Weight", "Material", etc.
+  value       String   // The actual value
+  group       String?  // Optional grouping for specs
+  order       Int      @default(0)
+
+  @@index([productId])
+}
+
+// Flash Sales Model
+model FlashSale {
+  id          String    @id @default(cuid())
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId   String    @unique
+  discount    Float     // Discount percentage
+  startTime   DateTime  // Updated to include time
+  endTime     DateTime  // Updated to include time
+  isActive    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Example: Size Guide for Fashion
+model SizeGuide {
+  id          String       @id @default(cuid())
+  category    Category     @relation(fields: [categoryId], references: [id])
+  categoryId  String
+  type        SizeGuideType
+  sizeChart   Json         // Store size chart as JSON
+  measurements String[]    // e.g., ["chest", "waist", "hips"] for clothing
+}
+
+// Home Page Section
+
+// Hero Section
+model HeroSlide {
+  id          String    @id @default(cuid())
+  title       String
+  subtitle    String
+  description String
+  image       String
+  ctaText     String
+  ctaLink     String
+  order       Int       // For slide ordering
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Trust Signals
+model TrustSignal {
+  id          String    @id @default(cuid())
+  icon        String    // Store icon name (e.g., "Truck", "Shield")
+  title       String
+  description String
+  order       Int
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Featured Categories Section
+model FeaturedCategory {
+  id          String    @id @default(cuid())
+  name        String
+  tagline     String
+  image       String
+  href        String
+  actionText  String
+  order       Int
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Promotional Banners
+model PromotionalBanner {
+  id          String    @id @default(cuid())
+  title       String
+  subtitle    String
+  description String
+  buttonText  String
+  href        String
+  image       String
+  position    String    // "left", "right", "center"
+  order       Int
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Flash Sales Configuration
+model FlashSaleConfig {
+  id          String    @id @default(cuid())
+  startTime   DateTime
+  endTime     DateTime
+  title       String
+  subtitle    String
+  description String?
+  bannerImage String?   
+  isActive    Boolean   @default(true)
+  products    FlashSaleProduct[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Add DiscountType enum
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+model FlashSaleProduct {
+  id                String         @id @default(cuid())
+  product          Product        @relation("ProductFlashSales", fields: [productId], references: [id], onDelete: Cascade)
+  productId        String
+  flashSale        FlashSaleConfig @relation(fields: [flashSaleId], references: [id], onDelete: Cascade)
+  flashSaleId      String
+  discountPrice    Float
+  discountPercentage Float
+  originalPrice    Float
+  order           Int
+  stock           Int
+  soldCount       Int            @default(0)
+  discountType     DiscountType   @default(PERCENTAGE)
+  fixedDiscount    Float          @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([productId, flashSaleId])
+  @@index([productId])
+  @@index([flashSaleId])
+}
+
+// Blog Section
+model BlogPost {
+  id          String    @id @default(cuid())
+  title       String
+  excerpt     String
+  content     String    @db.Text
+  image       String
+  category    String
+  author      String
+  slug        String    @unique
+  isFeatured  Boolean   @default(false)
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Home Page Sections Configuration
+model HomePageConfig {
+  id                              String    @id @default(cuid())
+  heroSectionEnabled             Boolean   @default(true)
+  trustSignalsEnabled            Boolean   @default(true)
+  featuredCategoriesEnabled      Boolean   @default(true)
+  trendingProductsEnabled        Boolean   @default(true)
+  promotionalBannersEnabled      Boolean   @default(true)
+  personalizedRecsEnabled        Boolean   @default(true)
+  flashSalesEnabled             Boolean   @default(true)
+  blogSectionEnabled            Boolean   @default(true)
+  
+  // Section Titles and Subtitles
+  trendingProductsTitle         String    @default("Trending Now")
+  trendingProductsSubtitle      String    @default("Discover this week's most-wanted styles")
+  featuredCategoriesTitle       String    @default("Shop by Category")
+  featuredCategoriesSubtitle    String    @default("Explore our collections")
+  personalizedRecsTitle         String    @default("Recommended For You")
+  personalizedRecsSubtitle      String    @default("Based on your style preferences")
+  blogSectionTitle             String    @default("Style Journal")
+  blogSectionSubtitle          String    @default("Stories from the world of fashion")
+  
+  // Section Limits
+  trendingProductsLimit        Int       @default(10)
+  featuredCategoriesLimit      Int       @default(3)
+  flashSaleProductsLimit       Int       @default(4)
+  blogPostsLimit              Int       @default(3)
+  
+  updatedAt                    DateTime  @updatedAt
+  updatedBy                    String    // Admin user who last updated
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  name       String
+  address    String
+  city       String
+  country    String
+  postalCode String
+  phone      String
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  orders     Order[]
+
+  @@index([userId])
+}
+model Order {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  addressId     String
+  address       Address       @relation(fields: [addressId], references: [id])
+  items         OrderItem[]
+  couponId      String?
+  coupon        Coupon?       @relation(fields: [couponId], references: [id])
+  total         Float
+  status        OrderStatus   @default(PENDING)
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus @default(PENDING)
+  paymentId     String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([addressId])
+  @@index([couponId])
+}
+
+model OrderItem {
+  id              String   @id @default(cuid())
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id])
+  productId       String
+  productName     String
+  productCategory String
+  quantity        Int
+  size            String?
+  color           String?
+  price           Float
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Coupon {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  discountPercent Float
+    orders          Order[]
+  startDate       DateTime
+  endDate         DateTime
+  usageLimit      Int
+  usageCount      Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+}
+
+// Add SizeGuideType enum
+enum SizeGuideType {
+  CLOTHING
+  SHOES
+  ACCESSORIES
+}
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+}
+
+
