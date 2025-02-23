@@ -20,7 +20,7 @@ const app = express();
 const corsOptions = {
   origin:
     process.env.NODE_ENV === "production"
-      ? ["https://relic.vercel.app"]
+      ? ["https://relic-front.vercel.app"]
       : ["http://localhost:3000"],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
