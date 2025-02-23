@@ -2,17 +2,18 @@
   "version": 2,
   "builds": [
     {
-      "src": "dist/src/server.js",
+      "src": "src/server.ts",
       "use": "@vercel/node",
       "config": {
-        "buildCommand": "npm run build"
+        "installCommand": "npm install && npx prisma generate",
+        "buildCommand": "prisma generate && tsc"
       }
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "dist/src/server.js"
+      "dest": "src/server.ts"
     }
   ]
 }
